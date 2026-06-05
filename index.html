@@ -98,6 +98,12 @@
     .card .ico { font-size: 26px; margin-bottom: 10px; }
     .card h3 { font-size: 18px; margin-bottom: 8px; }
     .card p { color: var(--text-soft); font-size: 15px; }
+    .dlbtn {
+      display: inline-block; margin-top: 14px; padding: 9px 18px;
+      border-radius: 6px; background: var(--accent); color: #fff;
+      font-weight: 600; font-size: 14px; transition: background .12s, transform .12s;
+    }
+    .dlbtn:hover { background: var(--accent-dark); transform: translateY(-1px); }
 
     /* Ako to funguje */
     .steps { display: grid; gap: 24px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
@@ -303,12 +309,20 @@
           <h3>Windows</h3>
           <p><code>ArchivBlockov.exe</code> — dvojklik, netreba inštaláciu
              ani Python.</p>
+          <a class="dlbtn"
+             href="https://github.com/Orimslav/archiv_blockov/releases/latest/download/ArchivBlockov.exe">
+            ⬇ Stiahnuť .exe
+          </a>
         </div>
         <div class="card">
           <div class="ico">🐧</div>
           <h3>Linux</h3>
           <p><code>ArchivBlockov-x86_64.AppImage</code> — <code>chmod +x</code>
              a spustiť. Prenosné, beží na väčšine distribúcií (vyžaduje FUSE).</p>
+          <a class="dlbtn"
+             href="https://github.com/Orimslav/archiv_blockov/releases/latest/download/ArchivBlockov-x86_64.AppImage">
+            ⬇ Stiahnuť AppImage
+          </a>
         </div>
       </div>
       <p class="sub" style="margin-bottom:20px;">Ku každému súboru je priložený
