@@ -53,15 +53,6 @@ jobs:
             dist/ArchivBlockov.exe
             dist/ArchivBlockov.exe.sha256
 
-      - name: Vytvorenie vydania (release) s priloženým EXE
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            dist/ArchivBlockov.exe
-            dist/ArchivBlockov.exe.sha256
-          generate_release_notes: true
-
   build-linux:
     name: Zostaviť AppImage (Linux)
     runs-on: ubuntu-latest
@@ -137,11 +128,22 @@ jobs:
             ArchivBlockov-x86_64.AppImage
             ArchivBlockov-x86_64.AppImage.sha256
 
-      - name: Pridanie AppImage k vydaniu (release)
-        if: startsWith(github.ref, 'refs/tags/')
+  # Jedno vydanie so všetkými súbormi a jedným changelogom — beží až po
+  # úspešnom zostavení oboch platforiem a iba pri pushnutí tagu v*.
+  release:
+    name: Vytvoriť vydanie (release)
+    needs: [build, build-linux]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Stiahnutie artefaktov zostavenia
+        uses: actions/download-artifact@v7
+        with:
+          path: dist
+
+      - name: Vytvorenie vydania s priloženými súbormi
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            ArchivBlockov-x86_64.AppImage
-            ArchivBlockov-x86_64.AppImage.sha256
+          files: dist/**/*
           generate_release_notes: true
