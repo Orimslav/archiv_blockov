@@ -24,10 +24,10 @@ jobs:
 
     steps:
       - name: Stiahnutie zdrojového kódu
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Nastavenie Pythonu
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
 
@@ -46,7 +46,7 @@ jobs:
           "$hash  ArchivBlockov.exe" | Out-File -Encoding ascii dist/ArchivBlockov.exe.sha256
 
       - name: Nahranie EXE ako artefaktu zostavenia
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ArchivBlockov-windows
           path: |
@@ -68,10 +68,10 @@ jobs:
 
     steps:
       - name: Stiahnutie zdrojového kódu
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Nastavenie Pythonu
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
 
@@ -130,7 +130,7 @@ jobs:
         run: sha256sum ArchivBlockov-x86_64.AppImage > ArchivBlockov-x86_64.AppImage.sha256
 
       - name: Nahranie AppImage ako artefaktu zostavenia
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ArchivBlockov-linux
           path: |
