@@ -71,7 +71,7 @@ Postavená na **PySide6 (Qt)**, dáta v lokálnej **SQLite** databáze.
 ## Stiahnutie hotovej aplikácie
 
 Najnovšie zostavenie nájdete na stránke
-**[Releases](https://github.com/Orimslav/Archiv_blockov/releases/latest)**:
+**[Releases](https://github.com/Orimslav/archiv_blockov/releases/latest)**:
 
 | Systém | Súbor | Spustenie |
 |--------|-------|-----------|
