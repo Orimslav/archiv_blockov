@@ -142,6 +142,33 @@
       border-top: 1px solid var(--border); padding: 28px 24px;
       text-align: center; color: var(--text-soft); font-size: 14px;
     }
+
+    /* Responzívne — mobil */
+    @media (max-width: 640px) {
+      .nav {
+        flex-wrap: wrap; gap: 8px 14px; padding: 12px 16px;
+      }
+      .nav .spacer { display: none; }      /* nech sa odkazy zalomia hneď pod názov */
+      .nav .name { font-size: 18px; }
+      .nav img { height: 34px; }
+      .nav .links {
+        flex-basis: 100%;
+        display: flex; flex-wrap: wrap; gap: 6px 16px;
+      }
+      .nav a.link { margin-left: 0; font-size: 14px; }
+
+      .wrap { padding: 0 16px; }
+      .hero { padding: 56px 16px 48px; }
+      .hero h1 { font-size: 32px; }
+      .hero p.lead { font-size: 17px; }
+      .hero .btn {
+        display: block; width: 100%; max-width: 300px;
+        margin-left: auto; margin-right: auto;
+      }
+      .btn-ghost { margin-left: auto; margin-top: 12px; }
+      section.block { padding: 48px 0; }
+      section.block h2 { font-size: 25px; }
+    }
   </style>
 </head>
 <body>
@@ -151,12 +178,14 @@
       <img src="assets/logo.png" alt="Logo">
       <span class="name">Archív bločkov</span>
       <span class="spacer"></span>
-      <a class="link" href="#funkcie">Funkcie</a>
-      <a class="link" href="#nahlady">Náhľady</a>
-      <a class="link" href="#ako">Ako to funguje</a>
-      <a class="link" href="#build">Stiahnutie</a>
-      <a class="link kofi" href="https://ko-fi.com/orimslav"
-         target="_blank" rel="noopener">☕ Ko-fi</a>
+      <span class="links">
+        <a class="link" href="#funkcie">Funkcie</a>
+        <a class="link" href="#nahlady">Náhľady</a>
+        <a class="link" href="#ako">Ako to funguje</a>
+        <a class="link" href="#build">Stiahnutie</a>
+        <a class="link kofi" href="https://ko-fi.com/orimslav"
+           target="_blank" rel="noopener">☕ Ko-fi</a>
+      </span>
     </nav>
   </header>
 
