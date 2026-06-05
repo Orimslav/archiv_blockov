@@ -112,17 +112,6 @@ venv/bin/python main.py
 Pri prvom spustení appka vytvorí databázu v `data/archiv_blockov.db` a vyzve
 na vytvorenie prvého profilu (odporúča „Moja domácnosť").
 
-### Vzorové dáta (voliteľné)
-
-Na vyskúšanie funkcií sa dá databáza naplniť ukážkovými bločkami:
-
-```bat
-venv\Scripts\python tests\seed_sample_data.py
-```
-
-Skript je opätovne spustiteľný — staré vzorové bločky najprv vymaže, reálne
-dáta nechá nedotknuté.
-
 ---
 
 ## Zostavenie EXE súboru
