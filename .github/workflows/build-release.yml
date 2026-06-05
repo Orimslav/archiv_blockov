@@ -1,0 +1,147 @@
+# Zostavenie a vydanie aplikácie Archív bločkov.
+# Spustí sa po pushnutí značky (tagu) v tvare v* (napr. v1.0.0),
+# alebo ručne cez záložku Actions na GitHube.
+#
+# Windows  → ArchivBlockov.exe
+# Linux    → ArchivBlockov-x86_64.AppImage  (prenosný, „stiahni a spusti")
+# Ku každému súboru sa priloží kontrolný súčet (.sha256).
+
+name: Zostavenie a vydanie
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:        # umožní ručné spustenie z GitHub Actions
+
+permissions:
+  contents: write           # potrebné na vytvorenie vydania (release)
+
+jobs:
+  build:
+    name: Zostaviť EXE (Windows)
+    runs-on: windows-latest
+
+    steps:
+      - name: Stiahnutie zdrojového kódu
+        uses: actions/checkout@v4
+
+      - name: Nastavenie Pythonu
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Inštalácia závislostí
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Zostavenie EXE súboru
+        run: pyinstaller archiv_blockov.spec --clean --noconfirm
+
+      - name: Kontrolný súčet (SHA256)
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash dist/ArchivBlockov.exe -Algorithm SHA256).Hash.ToLower()
+          "$hash  ArchivBlockov.exe" | Out-File -Encoding ascii dist/ArchivBlockov.exe.sha256
+
+      - name: Nahranie EXE ako artefaktu zostavenia
+        uses: actions/upload-artifact@v4
+        with:
+          name: ArchivBlockov-windows
+          path: |
+            dist/ArchivBlockov.exe
+            dist/ArchivBlockov.exe.sha256
+
+      - name: Vytvorenie vydania (release) s priloženým EXE
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/ArchivBlockov.exe
+            dist/ArchivBlockov.exe.sha256
+          generate_release_notes: true
+
+  build-linux:
+    name: Zostaviť AppImage (Linux)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Stiahnutie zdrojového kódu
+        uses: actions/checkout@v4
+
+      - name: Nastavenie Pythonu
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Inštalácia systémových knižníc pre Qt
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgl1 libxkbcommon0 fonts-dejavu
+
+      - name: Inštalácia závislostí
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Zostavenie binárky (PyInstaller)
+        run: pyinstaller archiv_blockov.spec --clean --noconfirm
+
+      - name: Príprava AppDir
+        run: |
+          mkdir -p AppDir/usr/bin
+          cp dist/ArchivBlockov AppDir/usr/bin/ArchivBlockov
+          chmod +x AppDir/usr/bin/ArchivBlockov
+          # Ikona (názov musí súhlasiť s Icon= v .desktop súbore)
+          cp assets/logo.png AppDir/archiv_blockov.png
+          # Desktop súbor pre integráciu (ikona v menu, názov aplikácie)
+          cat > AppDir/archiv_blockov.desktop <<'EOF'
+          [Desktop Entry]
+          Type=Application
+          Name=Archív bločkov
+          Comment=Archivácia slovenských e-kasa bločkov
+          Exec=ArchivBlockov
+          Icon=archiv_blockov
+          Categories=Office;Finance;
+          Terminal=false
+          EOF
+          # Spúšťač, ktorý AppImage zavolá pri štarte
+          cat > AppDir/AppRun <<'EOF'
+          #!/bin/sh
+          HERE="$(dirname "$(readlink -f "$0")")"
+          exec "$HERE/usr/bin/ArchivBlockov" "$@"
+          EOF
+          chmod +x AppDir/AppRun
+
+      - name: Stiahnutie appimagetool
+        run: |
+          wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool-x86_64.AppImage
+
+      - name: Zostavenie AppImage
+        # PyInstaller už Qt zabalil — zámerne NEpoužívame linuxdeploy-plugin-qt
+        # (zdvojilo by Qt). FUSE na runneri chýba → --appimage-extract-and-run.
+        run: |
+          ARCH=x86_64 ./appimagetool-x86_64.AppImage \
+            --appimage-extract-and-run AppDir ArchivBlockov-x86_64.AppImage
+
+      - name: Kontrolný súčet (SHA256)
+        run: sha256sum ArchivBlockov-x86_64.AppImage > ArchivBlockov-x86_64.AppImage.sha256
+
+      - name: Nahranie AppImage ako artefaktu zostavenia
+        uses: actions/upload-artifact@v4
+        with:
+          name: ArchivBlockov-linux
+          path: |
+            ArchivBlockov-x86_64.AppImage
+            ArchivBlockov-x86_64.AppImage.sha256
+
+      - name: Pridanie AppImage k vydaniu (release)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ArchivBlockov-x86_64.AppImage
+            ArchivBlockov-x86_64.AppImage.sha256
+          generate_release_notes: true

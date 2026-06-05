@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<!--
+  Landing page aplikácie Archív bločkov.
+  Tlačidlo „Stiahnuť" smeruje na GitHub vydania (releases) — ak je repozitár
+  pod iným menom/účtom, uprav URL v sekcii .hero nižšie.
+-->
+<html lang="sk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Archív bločkov — archivácia e-kasa bločkov</title>
+  <meta name="description"
+        content="Desktopová aplikácia na archiváciu slovenských e-kasa bločkov skenovaných cez USB QR skener. Profily, kategórie, reporty, PDF/Excel exporty a dashboard.">
+  <style>
+    :root {
+      --bg-dark: #0d0d1a;
+      --bg-main: #1a1a2e;
+      --sidebar: #16213e;
+      --panel: #1e1e35;
+      --accent: #4a9eff;
+      --accent-dark: #2979d4;
+      --success: #2ecc71;
+      --text: #e0e0e0;
+      --text-soft: #9a9aac;
+      --border: #333355;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: var(--bg-main);
+      color: var(--text);
+      line-height: 1.6;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+
+    /* Hlavička */
+    header {
+      background: var(--sidebar);
+      border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 10;
+    }
+    .nav {
+      display: flex; align-items: center; gap: 14px;
+      padding: 14px 24px; max-width: 1080px; margin: 0 auto;
+    }
+    .nav img { height: 40px; }
+    .nav .name { font-size: 20px; font-weight: 700; }
+    .nav .spacer { flex: 1; }
+    .nav a.link { color: var(--text-soft); margin-left: 20px; font-size: 15px; }
+    .nav a.link:hover { color: var(--accent); }
+    .nav a.link.kofi { color: #29ABE0; font-weight: 600; }
+    .nav a.link.kofi:hover { color: #5cc6ee; }
+
+    /* Hero */
+    .hero {
+      text-align: center;
+      padding: 84px 24px 64px;
+      background: radial-gradient(circle at 50% 0%, #20204a 0%, var(--bg-main) 60%);
+    }
+    .hero img.logo { height: 96px; margin-bottom: 24px; }
+    .hero h1 { font-size: 44px; line-height: 1.15; margin-bottom: 16px; }
+    .hero h1 .hl { color: var(--accent); }
+    .hero p.lead {
+      font-size: 19px; color: var(--text-soft);
+      max-width: 660px; margin: 0 auto 32px;
+    }
+    .btn {
+      display: inline-block; padding: 14px 30px; border-radius: 8px;
+      font-size: 16px; font-weight: 600; transition: transform .12s, background .12s;
+    }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: var(--accent-dark); transform: translateY(-2px); }
+    .btn-ghost {
+      background: transparent; color: var(--text);
+      border: 1px solid var(--border); margin-left: 12px;
+    }
+    .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+    .hero .note { margin-top: 14px; font-size: 14px; color: var(--text-soft); }
+
+    /* Sekcie */
+    section.block { padding: 64px 0; border-top: 1px solid var(--border); }
+    section.block h2 { font-size: 30px; text-align: center; margin-bottom: 12px; }
+    section.block p.sub {
+      text-align: center; color: var(--text-soft);
+      max-width: 620px; margin: 0 auto 44px;
+    }
+
+    /* Mriežka funkcií */
+    .grid {
+      display: grid; gap: 20px;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    }
+    .card {
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: 10px; padding: 24px;
+    }
+    .card .ico { font-size: 26px; margin-bottom: 10px; }
+    .card h3 { font-size: 18px; margin-bottom: 8px; }
+    .card p { color: var(--text-soft); font-size: 15px; }
+
+    /* Ako to funguje */
+    .steps { display: grid; gap: 24px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+    .step { text-align: center; padding: 0 12px; }
+    .step .num {
+      width: 44px; height: 44px; border-radius: 50%;
+      background: var(--accent); color: #fff; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 14px; font-size: 18px;
+    }
+    .step h3 { font-size: 17px; margin-bottom: 6px; }
+    .step p { color: var(--text-soft); font-size: 14px; }
+
+    /* Build */
+    .codebox {
+      background: var(--bg-dark); border: 1px solid var(--border);
+      border-radius: 8px; padding: 18px 20px; max-width: 640px; margin: 0 auto;
+      font-family: Consolas, "Courier New", monospace; font-size: 14px;
+      color: #cdd6e6; overflow-x: auto;
+    }
+    .codebox .c { color: #6b7a99; }
+
+    /* Náhľady */
+    .shots { display: grid; gap: 28px; grid-template-columns: 1fr; }
+    .shot { text-align: center; }
+    .shot img {
+      width: 100%; height: auto; border-radius: 10px;
+      border: 1px solid var(--border);
+      box-shadow: 0 8px 28px rgba(0,0,0,.45);
+    }
+    .shot .cap { margin-top: 10px; color: var(--text-soft); font-size: 14px; }
+    @media (min-width: 760px) { .shots { grid-template-columns: 1fr 1fr; } }
+
+    /* Päta */
+    footer {
+      border-top: 1px solid var(--border); padding: 28px 24px;
+      text-align: center; color: var(--text-soft); font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <nav class="nav">
+      <img src="assets/logo.png" alt="Logo">
+      <span class="name">Archív bločkov</span>
+      <span class="spacer"></span>
+      <a class="link" href="#funkcie">Funkcie</a>
+      <a class="link" href="#nahlady">Náhľady</a>
+      <a class="link" href="#ako">Ako to funguje</a>
+      <a class="link" href="#build">Stiahnutie</a>
+      <a class="link kofi" href="https://ko-fi.com/orimslav"
+         target="_blank" rel="noopener">☕ Ko-fi</a>
+    </nav>
+  </header>
+
+  <div class="hero">
+    <img class="logo" src="assets/logo.png" alt="Archív bločkov">
+    <h1>Archivujte e-kasa bločky <span class="hl">jednoducho</span></h1>
+    <p class="lead">
+      Naskenujte QR kód bločku a aplikácia ho uloží, zaradí podľa dátumu,
+      rozpozná predajcu aj položky a pripraví reporty, exporty a prehľady.
+    </p>
+    <!-- Ak je repozitár pod iným menom/účtom, uprav nasledujúce URL -->
+    <a class="btn btn-primary"
+       href="https://github.com/Orimslav/Archiv_blockov/releases/latest">
+      Stiahnuť aplikáciu
+    </a>
+    <a class="btn btn-ghost" href="#build">Windows aj Linux</a>
+    <p class="note">Windows (.exe) aj Linux (AppImage) · bez inštalácie ·
+      🔒 všetko lokálne, žiadny cloud</p>
+  </div>
+
+  <section class="block" id="funkcie">
+    <div class="wrap">
+      <h2>Čo aplikácia dokáže</h2>
+      <p class="sub">Všetko, čo potrebujete na poriadok v bločkoch — pre
+        domácnosť aj firmu.</p>
+      <div class="grid">
+        <div class="card">
+          <div class="ico">📷</div>
+          <h3>Skenovanie QR</h3>
+          <p>USB <strong>2D (QR) čítačka</strong> (ako klávesnica) alebo ručné
+             zadanie UID. Online aj offline bločky vrátane položiek.</p>
+        </div>
+        <div class="card">
+          <div class="ico">📁</div>
+          <h3>Profily a kategórie</h3>
+          <p>Viacero profilov (domácnosť, firma). Kategórie na úrovni
+             položiek s učením podľa predajcu.</p>
+        </div>
+        <div class="card">
+          <div class="ico">📅</div>
+          <h3>Zakladanie podľa dátumu</h3>
+          <p>Bloček sa zaradí podľa dátumu z QR kódu — bez ohľadu na to,
+             kedy ho naskenujete.</p>
+        </div>
+        <div class="card">
+          <div class="ico">🔎</div>
+          <h3>Hľadanie položiek</h3>
+          <p>Vyhľadajte položku naprieč bločkami, sledujte spotrebu
+             a vývoj ceny v čase. Aliasy zlúčia varianty názvov.</p>
+        </div>
+        <div class="card">
+          <div class="ico">🧾</div>
+          <h3>Verný doklad</h3>
+          <p>Každý uložený bloček znova zobrazíte ako tlačiteľnú kópiu
+             s QR kódom — aj offline.</p>
+        </div>
+        <div class="card">
+          <div class="ico">📊</div>
+          <h3>Exporty a dashboard</h3>
+          <p>PDF prehľady, súhrny kategórií, DPH podklad, Excel/CSV
+             a grafy výdavkov po mesiacoch.</p>
+        </div>
+        <div class="card">
+          <div class="ico">💾</div>
+          <h3>Záloha a obnova</h3>
+          <p>Bezpečná záloha a obnova databázy s validáciou a automatickou
+             zálohou pred prepisom.</p>
+        </div>
+        <div class="card">
+          <div class="ico">🔐</div>
+          <h3>Voliteľné heslo</h3>
+          <p>Aplikáciu si môžete zaheslovať (bcrypt) — alebo nechať bez
+             hesla. Rozhodnutie je na vás.</p>
+        </div>
+        <div class="card">
+          <div class="ico">🔒</div>
+          <h3>Všetko lokálne</h3>
+          <p>Bločky aj dáta sa ukladajú výhradne vo vašom počítači (SQLite).
+             Žiadny cloud, nič sa nikam neposiela.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="nahlady">
+    <div class="wrap">
+      <h2>Náhľady</h2>
+      <p class="sub">Prehľadné tmavé rozhranie optimalizované pre Full HD.</p>
+      <div class="shots">
+        <div class="shot">
+          <img src="img/blocky.png" alt="Zoznam bločkov">
+          <div class="cap">Zoznam bločkov (domácnosť)</div>
+        </div>
+        <div class="shot">
+          <img src="img/blocky_firma.png" alt="Zoznam bločkov s DPH">
+          <div class="cap">Rozpad DPH (firemný profil)</div>
+        </div>
+        <div class="shot">
+          <img src="img/dashboard.png" alt="Dashboard">
+          <div class="cap">Dashboard — výdavky po mesiacoch a kategóriách</div>
+        </div>
+        <div class="shot">
+          <img src="img/dph.png" alt="PDF export DPH podklad">
+          <div class="cap">PDF export — DPH podklad</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="ako">
+    <div class="wrap">
+      <h2>Ako to funguje</h2>
+      <p class="sub">Od naskenovania po hotový archív v štyroch krokoch.</p>
+      <div class="steps">
+        <div class="step">
+          <div class="num">1</div>
+          <h3>Naskenujte</h3>
+          <p>Priložte QR kód bločku k USB skeneru.</p>
+        </div>
+        <div class="step">
+          <div class="num">2</div>
+          <h3>Skontrolujte</h3>
+          <p>Aplikácia načíta predajcu, dátum, sumu aj položky.</p>
+        </div>
+        <div class="step">
+          <div class="num">3</div>
+          <h3>Zaraďte</h3>
+          <p>Vyberte kategóriu — bloček sa uloží do správneho obdobia.</p>
+        </div>
+        <div class="step">
+          <div class="num">4</div>
+          <h3>Vyhodnoťte</h3>
+          <p>Prezerajte reporty, exporty a grafy kedykoľvek.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="build">
+    <div class="wrap">
+      <h2>Stiahnutie a spustenie</h2>
+      <p class="sub">Stiahnite hotový súbor z vydaní pre Windows aj Linux,
+        alebo si aplikáciu zostavte zo zdrojového kódu.</p>
+      <p class="sub" style="margin-top:-28px;">📷 Na skenovanie je potrebná
+        <strong>USB 2D (QR) čítačka čiarových kódov</strong> (bežná 1D laserová
+        nestačí). Bločky sa dajú zadať aj ručne.</p>
+      <div class="grid" style="max-width:760px;margin:0 auto 36px;">
+        <div class="card">
+          <div class="ico">🪟</div>
+          <h3>Windows</h3>
+          <p><code>ArchivBlockov.exe</code> — dvojklik, netreba inštaláciu
+             ani Python.</p>
+        </div>
+        <div class="card">
+          <div class="ico">🐧</div>
+          <h3>Linux</h3>
+          <p><code>ArchivBlockov-x86_64.AppImage</code> — <code>chmod +x</code>
+             a spustiť. Prenosné, beží na väčšine distribúcií (vyžaduje FUSE).</p>
+        </div>
+      </div>
+      <p class="sub" style="margin-bottom:20px;">Ku každému súboru je priložený
+        kontrolný súčet <code>.sha256</code>. Alebo zostavenie zo zdrojového kódu:</p>
+      <div class="codebox">
+        <span class="c">:: Windows</span><br>
+        python -m venv venv<br>
+        venv\Scripts\pip install -r requirements.txt<br>
+        venv\Scripts\python main.py<br><br>
+        <span class="c"># Linux</span><br>
+        python3 -m venv venv<br>
+        venv/bin/pip install -r requirements.txt<br>
+        venv/bin/python main.py
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    © Orimslav — Archív bločkov · Desktopová aplikácia pre Windows a Linux (PySide6)<br>
+    Páči sa vám? Podporte vývoj kávou ☕
+    <a href="https://ko-fi.com/orimslav" target="_blank" rel="noopener"
+       style="color:#29ABE0;font-weight:600;">ko-fi.com/orimslav</a>
+  </footer>
+
+</body>
+</html>

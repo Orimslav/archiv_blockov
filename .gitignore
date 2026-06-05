@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Virtual environment
+venv/
+
+# Build artifacts
+build/
+dist/
+*.spec.bak
+# PyInstaller onefile extraction temp dirs (left if the app is killed)
+_MEI*/
+
+# Application data / logs
+data/*.db
+data/*.db-journal
+*.log
+
+# OS / editor
+Thumbs.db
+.vscode/
+.idea/

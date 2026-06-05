@@ -1,0 +1,9 @@
+PySide6
+Pillow
+bcrypt
+reportlab
+qrcode
+openpyxl
+requests
+urllib3
+pyinstaller
