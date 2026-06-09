@@ -33,10 +33,16 @@ def build_qss() -> str:
         background-color: {c.CLR_BG_DARK};
         border-bottom: 1px solid {c.CLR_BORDER};
     }}
+    #AppLogo {{
+        padding-left: 8px;
+        padding-right: 4px;
+    }}
     #AppTitle {{
         font-size: {c.FONT_SIZE_LARGE}pt;
         font-weight: bold;
         color: {c.CLR_TEXT_PRIMARY};
+        padding-left: 10px;
+        padding-right: 10px;
     }}
     #ScannerStatus {{
         color: {c.CLR_SUCCESS};

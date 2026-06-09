@@ -30,9 +30,11 @@ from core import pdf_export
 from core.ekasa_parser import parse_qr
 from models.models import ParsedReceipt, Profile, Receipt, ReceiptItem
 from ui import constants as c
+from ui.bulk_scan import BulkScanDialog
 from ui.category_manager import CategoryManagerDialog
 from ui.dashboard import DashboardWidget
 from ui.dialogs import ManualReceiptDialog, ProfileDialog, SaveReceiptDialog
+from ui.flow_layout import FlowLayout
 from ui.item_search import ItemSearchView
 from ui.platform_utils import open_path, open_url
 from ui.profile_panel import ProfilePanel
@@ -150,6 +152,11 @@ class MainWindow(QMainWindow):
         self._worker: Optional[ScanWorker] = None
         self._resync_thread: Optional[QThread] = None
         self._resync_worker: Optional[ResyncWorker] = None
+        self._bulk_dialog: Optional[BulkScanDialog] = None
+        self._bulk_queue: List[str] = []
+        self._bulk_busy = False
+        self._bulk_thread: Optional[QThread] = None
+        self._bulk_worker: Optional[ScanWorker] = None
 
         self.setWindowTitle("Archív bločkov")
         self.setMinimumSize(c.MIN_WINDOW_WIDTH, c.MIN_WINDOW_HEIGHT)
@@ -201,6 +208,7 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(12, 8, 12, 8)
 
         logo = QLabel()
+        logo.setObjectName("AppLogo")
         logo_path = self._assets_dir / "logo.png"
         if logo_path.exists():
             pix = QPixmap(str(logo_path)).scaledToHeight(
@@ -293,7 +301,10 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.receipt_view, 1)
 
         # Action buttons
-        actions = QHBoxLayout()
+        # FlowLayout wraps the buttons onto extra rows instead of squeezing them
+        # below their text width — prevents clipped labels at e.g. 125% DPI.
+        actions = FlowLayout(spacing=6)
+        btn_bulk = QPushButton("Hromadné skenovanie")
         btn_uid = QPushButton("Zadať UID")
         btn_manual = QPushButton("Pridať ručne")
         btn_detail = QPushButton("Zobraziť doklad")
@@ -306,6 +317,7 @@ class MainWindow(QMainWindow):
         btn_backup = QPushButton("Zálohovať DB")
         btn_restore = QPushButton("Obnoviť DB")
         btn_security = QPushButton("Zabezpečenie…")
+        btn_bulk.clicked.connect(self._open_bulk_scan)
         btn_uid.clicked.connect(self._enter_uid)
         btn_manual.clicked.connect(self._add_manual_receipt)
         btn_detail.clicked.connect(self._open_selected_detail)
@@ -315,10 +327,9 @@ class MainWindow(QMainWindow):
         btn_backup.clicked.connect(self._backup_db)
         btn_restore.clicked.connect(self._restore_db)
         btn_security.clicked.connect(self._open_security)
-        for b in (btn_uid, btn_manual, btn_detail, btn_delete, btn_categories,
+        for b in (btn_bulk, btn_uid, btn_manual, btn_detail, btn_delete, btn_categories,
                   btn_resync, btn_export, btn_backup, btn_restore, btn_security):
             actions.addWidget(b)
-        actions.addStretch(1)
         layout.addLayout(actions)
         return tab
 
@@ -551,6 +562,104 @@ class MainWindow(QMainWindow):
             vat_rate=0, category_id=category_id, is_synthetic=True,
         )]
 
+    # ------------------------------------------------------------ bulk scanning
+
+    def _open_bulk_scan(self) -> None:
+        """Open the bulk-scan window: scans are saved silently until it closes."""
+        if not self._active_profile:
+            QMessageBox.warning(self, "Žiadny profil", "Najprv vyberte profil.")
+            return
+        if self._bulk_dialog is not None:
+            self._bulk_dialog.raise_()
+            self._bulk_dialog.activateWindow()
+            return
+        self.scanner.set_suspended(True)
+        self._bulk_queue = []
+        self._bulk_busy = False
+        dialog = BulkScanDialog(self)
+        self._bulk_dialog = dialog
+        dialog.scanned.connect(self._enqueue_bulk_scan)
+        dialog.finished.connect(self._close_bulk_scan)
+        dialog.show()
+
+    def _close_bulk_scan(self, _result: int = 0) -> None:
+        """End bulk mode: hand input back to the main scanner and refresh views."""
+        self.scanner.set_suspended(False)
+        self._bulk_dialog = None
+        self._bulk_queue = []
+        self._refresh_filter_combos()
+        self._reload_receipts()
+        self._update_uncategorized_badge()
+
+    def _enqueue_bulk_scan(self, qr_raw: str) -> None:
+        """Queue a scanned QR for sequential background processing."""
+        self._bulk_queue.append(qr_raw)
+        self._process_bulk_queue()
+
+    def _process_bulk_queue(self) -> None:
+        """Process the next queued scan, one at a time, off the GUI thread."""
+        if self._bulk_busy or not self._bulk_queue or self._bulk_dialog is None:
+            return
+        qr_raw = self._bulk_queue.pop(0)
+
+        # Duplicate guard — stop and ask before saving (per user's choice).
+        if self._db.receipt_exists(self._active_profile.id, qr_raw):
+            reply = QMessageBox.question(
+                self._bulk_dialog, "Duplicitný bloček",
+                "Tento bloček už v profile existuje. Uložiť napriek tomu?",
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                self._bulk_dialog.add_error("Preskočený duplicitný bloček")
+                self._process_bulk_queue()
+                return
+
+        self._bulk_busy = True
+        self._bulk_thread = QThread()
+        self._bulk_worker = ScanWorker(qr_raw)
+        self._bulk_worker.moveToThread(self._bulk_thread)
+        self._bulk_thread.started.connect(self._bulk_worker.run)
+        self._bulk_worker.finished.connect(self._on_bulk_scan_finished)
+        self._bulk_worker.failed.connect(self._on_bulk_scan_failed)
+        self._bulk_worker.finished.connect(self._bulk_thread.quit)
+        self._bulk_worker.failed.connect(self._bulk_thread.quit)
+        self._bulk_thread.start()
+
+    def _on_bulk_scan_finished(self, parsed: ParsedReceipt) -> None:
+        """Save a scanned receipt silently using the vendor's default category."""
+        if parsed.ico and not parsed.nazov:
+            info = company_lookup.lookup_by_ico(parsed.ico)
+            if info:
+                parsed.nazov = info.name
+                parsed.adresa = info.full_address()
+                parsed.dic = parsed.dic or info.dic
+
+        pid = self._active_profile.id
+        vendor = self._db.get_or_create_vendor(pid, parsed)
+        category_id = vendor.default_category_id  # learned default or None
+        receipt = self._parsed_to_receipt(parsed, pid, vendor.id, category_id, "")
+        receipt_id = self._db.insert_receipt(receipt)
+        self._db.insert_items(receipt_id, self._items_for_save(parsed, category_id))
+
+        total = parsed.vat.celkom or 0.0
+        cat_name = next(
+            (cc.name for cc in self._db.get_categories(pid) if cc.id == category_id),
+            "Nezaradené",
+        )
+        label = f"{vendor.display_name()} · {total:.2f} € · {cat_name}"
+        if self._bulk_dialog is not None:
+            self._bulk_dialog.add_success(label)
+        self.last_receipt_label.setText(f"Posledný bloček: {label}")
+
+        self._bulk_busy = False
+        self._process_bulk_queue()
+
+    def _on_bulk_scan_failed(self, message: str) -> None:
+        """Record a failed scan in the bulk window and continue the queue."""
+        if self._bulk_dialog is not None:
+            self._bulk_dialog.add_error(message)
+        self._bulk_busy = False
+        self._process_bulk_queue()
+
     # ------------------------------------------------------------ manual entry
 
     def _add_manual_receipt(self) -> None:
@@ -700,7 +809,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event) -> None:  # noqa: N802 — Qt override
         """Wait for any running worker thread before the window is destroyed."""
-        for thread in (self._resync_thread, self._thread):
+        for thread in (self._resync_thread, self._thread, self._bulk_thread):
             if thread is not None and thread.isRunning():
                 thread.quit()
                 thread.wait()
@@ -758,9 +867,18 @@ class MainWindow(QMainWindow):
         return ""
 
     def _save_path(self, caption: str, default_name: str, filt: str) -> Optional[Path]:
-        """Show a save dialog and return the chosen path (or None)."""
-        path, _ = QFileDialog.getSaveFileName(self, caption, default_name, filt)
-        return Path(path) if path else None
+        """Show a save dialog in the last-used export folder and return the path.
+
+        The chosen folder is remembered in ``settings.last_export_dir`` so the
+        next export opens in the same place.
+        """
+        last_dir = self._db.get_setting("last_export_dir", str(Path.home()))
+        suggested = str(Path(last_dir) / default_name)
+        path, _ = QFileDialog.getSaveFileName(self, caption, suggested, filt)
+        if not path:
+            return None
+        self._db.set_setting("last_export_dir", str(Path(path).parent))
+        return Path(path)
 
     @staticmethod
     def _open_file(path: Path) -> None:

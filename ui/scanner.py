@@ -31,6 +31,7 @@ class ScannerInput(QObject):
     def __init__(self, parent: QWidget, on_scan: Callable[[str], None]) -> None:
         super().__init__(parent)
         self._on_scan = on_scan
+        self._suspended = False
         self._buffer = QLineEdit(parent)
         self._buffer.setObjectName("ScannerBuffer")
         self._buffer.setFixedSize(1, 1)
@@ -41,6 +42,17 @@ class ScannerInput(QObject):
     def install(self, app: QApplication) -> None:
         """Install the application-level focus-reclaim event filter."""
         app.installEventFilter(self)
+
+    def set_suspended(self, suspended: bool) -> None:
+        """Pause/resume focus reclaim (used while a modal scan window owns input).
+
+        While suspended the main buffer neither reclaims focus nor reports
+        readiness, so another window (e.g. the bulk-scan dialog) can own the
+        scanner. Resuming returns focus to the buffer.
+        """
+        self._suspended = suspended
+        if not suspended:
+            self.reclaim_focus()
 
     def reclaim_focus(self) -> None:
         """Move focus back to the scanner buffer."""
@@ -59,6 +71,8 @@ class ScannerInput(QObject):
 
     def eventFilter(self, obj: QObject, event: QEvent) -> bool:
         """Reclaim focus after clicks and track scan-readiness via focus."""
+        if self._suspended:
+            return False
         event_type = event.type()
         if event_type == QEvent.Type.MouseButtonRelease:
             focused = QApplication.focusWidget()

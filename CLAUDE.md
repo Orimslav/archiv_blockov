@@ -212,7 +212,7 @@ Dedicated view (own tab) for **searching and reporting on line items** — e.g. 
 - **Name normalization** — SQLite `LIKE` is case-insensitive only for ASCII, so „chlieb" would not match „CHLIEB" with diacritics. Normalize both sides (lowercase, strip diacritics via `unicodedata.NFKD`, collapse repeated whitespace) before matching. Implement once as a helper (`core/text_utils.py::normalize_name()`) and register it as a SQLite function (`connection.create_function`) so the same normalization is usable inside SQL (`WHERE normalize_name(name) LIKE normalize_name(:term)`) and in alias matching. This also makes alias `pattern` matching diacritics/case tolerant for free.
 - Optional **alias** selection — pick a predefined item alias („Chlieb") to match all its patterns at once
 - Period filter (Rok / Mesiac) + category filter, combinable
-- **Results table**: Dátum · Predajca · Položka · Množstvo · Jedn. cena · Cena · Kategória — one row per matching item, sortable
+- **Results table**: Dátum · Predajca · Položka · Množstvo · Jedn. cena · Cena · Kategória — one row per matching item, sortable. The table is **read-only** (item names must match the original receipt); **double-clicking a row opens the receipt** the item belongs to (`ReceiptDetailDialog`)
 - Totals row: total quantity + total spend for the current result set
 
 ### Consumption report

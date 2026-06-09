@@ -8,6 +8,7 @@ from PySide6.QtCharts import QChartView, QChart, QDateTimeAxis, QLineSeries, QVa
 from PySide6.QtCore import QDateTime, Qt
 from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QComboBox,
     QFileDialog,
     QHBoxLayout,
@@ -28,6 +29,7 @@ from core.database import Database
 from ui import constants as c
 from ui.alias_manager import AliasManagerDialog
 from ui.platform_utils import open_path
+from ui.receipt_detail import ReceiptDetailDialog
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +83,11 @@ class ItemSearchView(QWidget):
             2, QHeaderView.ResizeMode.Stretch
         )
         self.table.setSortingEnabled(True)
+        # Results are a read-only view of receipt data — names must match the
+        # original receipt, so the table must not be editable.
+        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        # Double-clicking a row opens the receipt the item belongs to.
+        self.table.cellDoubleClicked.connect(self._open_receipt_for_row)
 
         self.totals = QLabel("")
         self.totals.setObjectName("LastReceipt")
@@ -157,7 +164,9 @@ class ItemSearchView(QWidget):
         total_spend = 0.0
         for i, r in enumerate(rows):
             datum = str(r.get("r_datum") or "")[:10]
-            self.table.setItem(i, 0, QTableWidgetItem(datum))
+            date_item = QTableWidgetItem(datum)
+            date_item.setData(Qt.ItemDataRole.UserRole, r.get("receipt_id"))
+            self.table.setItem(i, 0, date_item)
             self.table.setItem(i, 1, QTableWidgetItem(r.get("vendor_name") or "—"))
             self.table.setItem(i, 2, QTableWidgetItem(r.get("name") or ""))
             self.table.setItem(i, 3, QTableWidgetItem(f"{r.get('quantity') or 0:g}"))
@@ -174,6 +183,27 @@ class ItemSearchView(QWidget):
         )
         self.btn_export.setEnabled(bool(rows))
         self._build_price_chart()
+
+    # ------------------------------------------------------------ open receipt
+
+    def _open_receipt_for_row(self, row: int, _column: int) -> None:
+        """Open the detail dialog for the receipt the double-clicked item is on."""
+        if not self._profile_id:
+            return
+        cell = self.table.item(row, 0)
+        if cell is None:
+            return
+        receipt_id = cell.data(Qt.ItemDataRole.UserRole)
+        if receipt_id is None:
+            return
+        receipt = self._db.get_receipt(int(receipt_id))
+        if not receipt:
+            return
+        profile = self._db.get_profile(self._profile_id)
+        vat_enabled = bool(profile.vat_enabled) if profile else False
+        ReceiptDetailDialog(self._db, receipt, vat_enabled, self).exec()
+        # Category edits made in the detail may change the results — refresh.
+        self.run_search()
 
     # ------------------------------------------------------------ price chart
 
@@ -261,11 +291,14 @@ class ItemSearchView(QWidget):
             return
         safe = "".join(ch if ch.isalnum() else "_" for ch in self._last_label) or "polozka"
         ext, filt = ("xlsx", "Excel (*.xlsx)") if fmt == "xlsx" else ("pdf", "PDF (*.pdf)")
+        last_dir = self._db.get_setting("last_export_dir", str(Path.home()))
+        suggested = str(Path(last_dir) / f"report_{safe}.{ext}")
         path, _ = QFileDialog.getSaveFileName(
-            self, "Exportovať report položky", f"report_{safe}.{ext}", filt
+            self, "Exportovať report položky", suggested, filt
         )
         if not path:
             return
+        self._db.set_setting("last_export_dir", str(Path(path).parent))
         try:
             if fmt == "xlsx":
                 excel_export.export_item_report_xlsx(

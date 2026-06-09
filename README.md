@@ -25,6 +25,8 @@ Postavená na **PySide6 (Qt)**, dáta v lokálnej **SQLite** databáze.
 - **Skenovanie / zadanie UID** — USB **2D (QR) čítačka** (funguje ako
   klávesnica), online aj offline (`OKP:…`) bločky vrátane položiek; neúplné
   bločky sa automaticky dopĺňajú, keď ich pokladnica nahrá do eKasa.
+- **Hromadné skenovanie** — samostatné okno na rýchle naskenovanie viacerých
+  bločkov za sebou; ukladajú sa ticho s predvolenou kategóriou predajcu.
 - **Kategórie na úrovni položiek** — celý bloček dostane predvolenú kategóriu,
   jednotlivé položky sa dajú prepísať; učenie predvolenej kategórie podľa IČO.
 - **Univerzálny režim DPH** — firemný profil ukáže rozpad DPH (0/5/19/23 %),
@@ -33,7 +35,8 @@ Postavená na **PySide6 (Qt)**, dáta v lokálnej **SQLite** databáze.
   (offline, z uloženého `api_data`) vrátane QR kódu.
 - **Vyhľadávanie položiek a reporty spotreby** — hľadanie naprieč položkami
   (napr. „chlieb"), mesačné reporty množstva a sumy, **graf vývoja ceny**,
-  **aliasy** na zlúčenie variantov názvov.
+  **aliasy** na zlúčenie variantov názvov; **dvojklik na položku** otvorí
+  pôvodný doklad, na ktorom sa nachádza.
 - **Exporty** — PDF (prehľad bločkov, súhrn kategórií, report položky,
   DPH podklad), Excel/CSV.
 - **Dashboard** — grafy výdavkov po mesiacoch a podľa kategórií (QtCharts).

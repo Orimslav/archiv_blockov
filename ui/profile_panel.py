@@ -35,6 +35,14 @@ class ProfilePanel(QWidget):
         title.setObjectName("SidebarTitle")
 
         self.list = QListWidget()
+        # Long firm names are truncated with an ellipsis; the full name is shown
+        # in a tooltip on hover (sidebar width is limited). The horizontal
+        # scrollbar must be off — otherwise the item widens to the full text and
+        # the ellipsis never appears.
+        self.list.setTextElideMode(Qt.TextElideMode.ElideRight)
+        self.list.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
         self.list.currentItemChanged.connect(self._on_selection_changed)
         self.list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.list.customContextMenuRequested.connect(self._show_menu)
@@ -59,6 +67,7 @@ class ProfilePanel(QWidget):
         for p in profiles:
             item = QListWidgetItem(p.display_name())
             item.setData(Qt.ItemDataRole.UserRole, p.id)
+            item.setToolTip(p.display_name())  # full name on hover (may be elided)
             self.list.addItem(item)
             if p.id == active_id:
                 self.list.setCurrentItem(item)

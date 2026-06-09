@@ -9,6 +9,7 @@ from typing import List, Optional
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
+    QApplication,
     QComboBox,
     QDialog,
     QFrame,
@@ -42,7 +43,7 @@ class ReceiptDetailDialog(QDialog):
         self._api: dict = self._load_api_data(receipt)
 
         self.setWindowTitle(f"Doklad — {receipt.vendor_name or 'bloček'}")
-        self.setMinimumSize(760, 680)
+        self.setMinimumSize(620, 600)
 
         layout = QVBoxLayout(self)
 
@@ -50,6 +51,7 @@ class ReceiptDetailDialog(QDialog):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         content = QWidget()
+        self._doc_content = content
         doc = QVBoxLayout(content)
         doc.addWidget(self._build_vendor_section())
         doc.addWidget(self._separator())
@@ -69,6 +71,8 @@ class ReceiptDetailDialog(QDialog):
         layout.addWidget(scroll, 1)
 
         layout.addLayout(self._build_actions())
+
+        self._apply_dynamic_size()
 
     # ------------------------------------------------------------ data helpers
 
@@ -180,14 +184,17 @@ class ReceiptDetailDialog(QDialog):
         table.setHorizontalHeaderLabels(headers)
         table.verticalHeader().setVisible(False)
         header = table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        for col in range(1, 5):
+        # Name column sizes to its content so long item names are never clipped;
+        # the dialog itself grows to fit (see _apply_dynamic_size).
+        for col in range(5):
             header.setSectionResizeMode(col, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
         table.setColumnWidth(5, 180)
         table.verticalHeader().setDefaultSectionSize(34)
-        # Cap height so the table doesn't dominate the scroll area.
-        table.setMinimumHeight(140)
+        # Show every row — no inner scrollbar; the outer scroll area handles
+        # overflow when the whole document is taller than the screen.
+        table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
 
         for row, item in enumerate(self._items):
             table.setItem(row, 0, self._ro_item(item.name))
@@ -207,6 +214,43 @@ class ReceiptDetailDialog(QDialog):
             )
             table.setCellWidget(row, 5, combo)
         return table
+
+    def _apply_dynamic_size(self) -> None:
+        """Widen the dialog to fit the items table content, capped at the screen.
+
+        The item-name column is sized to its content, so long names make the
+        window grow up to the available screen width. Beyond that the table
+        keeps a horizontal scrollbar instead of clipping the names.
+        """
+        table = self.table
+        # Force the auto-sized columns to compute their content widths now.
+        table.resizeColumnsToContents()
+        table.setColumnWidth(5, 180)  # restore the fixed category-combo width
+
+        # Height: make the table tall enough for every row (no inner scroll).
+        row_h = table.verticalHeader().defaultSectionSize()
+        header_h = table.horizontalHeader().height()
+        table_h = header_h + table.rowCount() * row_h + table.frameWidth() * 2 + 2
+        table.setMinimumHeight(table_h)
+        table.setMaximumHeight(table_h)
+
+        header = table.horizontalHeader()
+        total = header.length()  # actual sum of all (laid-out) column widths
+        chrome = table.verticalHeader().width() + table.frameWidth() * 2 + 28
+        margins = self.layout().contentsMargins()
+        desired_w = total + chrome + margins.left() + margins.right()
+
+        # Whole-document height (vendor + meta + table + VAT + ids + actions).
+        desired_h = (self._doc_content.sizeHint().height()
+                     + margins.top() + margins.bottom() + 60)
+
+        screen = QApplication.primaryScreen()
+        avail = screen.availableGeometry() if screen else None
+        max_w = avail.width() - 80 if avail else 1800
+        max_h = avail.height() - 80 if avail else 1000
+        width = max(self.minimumWidth(), min(desired_w, max_w))
+        height = max(self.minimumHeight(), min(desired_h, max_h))
+        self.resize(width, height)
 
     @staticmethod
     def _ro_item(text: str) -> QTableWidgetItem:
@@ -304,7 +348,9 @@ class ReceiptDetailDialog(QDialog):
         from ui.platform_utils import open_path
 
         r = self._receipt
-        suggested = f"doklad_{r.datum.isoformat() if r.datum else r.id}.pdf"
+        last_dir = self._db.get_setting("last_export_dir", str(Path.home()))
+        default_name = f"doklad_{r.datum.isoformat() if r.datum else r.id}.pdf"
+        suggested = str(Path(last_dir) / default_name)
         path_str, _ = QFileDialog.getSaveFileName(
             self, "Uložiť doklad ako PDF", suggested, "PDF (*.pdf)"
         )
@@ -312,6 +358,7 @@ class ReceiptDetailDialog(QDialog):
             return
         if not path_str.lower().endswith(".pdf"):
             path_str += ".pdf"
+        self._db.set_setting("last_export_dir", str(Path(path_str).parent))
 
         try:
             path = pdf_export.export_receipt_detail_pdf(
