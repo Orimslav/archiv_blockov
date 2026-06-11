@@ -434,12 +434,40 @@ class Database:
             return [self._row_to_item(r) for r in cur.fetchall()]
 
     def set_item_category(self, item_id: int, category_id: Optional[int]) -> None:
-        """Set a single item's category."""
+        """Set a single item's category and keep the receipt chip in sync.
+
+        After the item changes, the receipt's ``default_category_id`` is
+        recomputed from its items: if every item shares one category the
+        receipt adopts it; if they differ it is cleared to NULL so the main
+        table shows the „zmiešané" chip.
+        """
+        now = datetime.now().isoformat(sep=" ", timespec="seconds")
         with self._cursor() as cur:
             cur.execute(
                 "UPDATE receipt_items SET category_id=?, updated_at=? WHERE id=?",
-                (category_id, datetime.now().isoformat(sep=" ", timespec="seconds"), item_id),
+                (category_id, now, item_id),
             )
+            row = cur.execute(
+                "SELECT receipt_id FROM receipt_items WHERE id=?", (item_id,)
+            ).fetchone()
+            if row is not None:
+                self._sync_receipt_default_category(cur, row["receipt_id"], now)
+
+    def _sync_receipt_default_category(self, cur, receipt_id: int, now: str) -> None:
+        """Set ``default_category_id`` to the items' shared category, else NULL.
+
+        Operates on an open cursor so it joins the caller's transaction.
+        """
+        rows = cur.execute(
+            "SELECT DISTINCT category_id FROM receipt_items WHERE receipt_id=?",
+            (receipt_id,),
+        ).fetchall()
+        distinct = [r["category_id"] for r in rows]
+        new_default = distinct[0] if len(distinct) == 1 else None
+        cur.execute(
+            "UPDATE receipts SET default_category_id=?, updated_at=? WHERE id=?",
+            (new_default, now, receipt_id),
+        )
 
     def set_receipt_category(self, receipt_id: int, category_id: Optional[int]) -> None:
         """Set the receipt default category and cascade to all its items."""

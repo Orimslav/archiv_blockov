@@ -9,6 +9,7 @@ Uses the stdlib ``urllib`` for the eKasa API (no extra dependency).
 
 import json
 import logging
+import re
 import time
 import urllib.error
 import urllib.request
@@ -21,6 +22,30 @@ logger = logging.getLogger(__name__)
 
 EKASA_URL = "https://ekasa.financnasprava.sk/mdu/api/v1/opd/receipt/find"
 EKASA_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+
+# --- QR validation patterns ------------------------------------------------
+# Online receipt: "O-" + 32 hex characters (receiptId), e.g.
+#   O-78784E1FCFFC4699B84E1FCFFC469934
+_ONLINE_QR_RE = re.compile(r"^O-[0-9A-Fa-f]{32}$")
+# Offline receipt: OKP (5 groups of 8 hex joined by "-") + ":" separated
+# cashRegisterCode : date(YYMMDDHHMMSS) : sequence : total, e.g.
+#   dfa0da45-e5468cd3-fd16dc63-9fae0781-9bd2cae4:88820203726400244:260410022154:6452:70.66
+_OFFLINE_QR_RE = re.compile(
+    r"^[0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{8}){4}"
+    r":[0-9A-Za-z]+:\d{12}:[0-9A-Za-z]+:\d+(?:[.,]\d+)?$"
+)
+
+
+def validate_qr(qr_raw: str) -> bool:
+    """Return True if the QR string is a valid e-kasa online or offline code.
+
+    The e-kasa system uses exactly two QR formats — a 32-hex online
+    ``receiptId`` (prefixed ``O-``) and a colon-delimited offline code built
+    around the 40-hex OKP. Anything else (random scanner noise, partial reads,
+    other barcode types) is rejected before any API request is made.
+    """
+    qr = (qr_raw or "").strip()
+    return bool(_ONLINE_QR_RE.match(qr) or _OFFLINE_QR_RE.match(qr))
 
 
 def fetch_receipt_detail(qr_raw: str) -> dict:

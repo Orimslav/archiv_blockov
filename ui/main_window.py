@@ -27,7 +27,7 @@ from core import company_lookup
 from core.database import Database
 from core import excel_export
 from core import pdf_export
-from core.ekasa_parser import parse_qr
+from core.ekasa_parser import parse_qr, validate_qr
 from models.models import ParsedReceipt, Profile, Receipt, ReceiptItem
 from ui import constants as c
 from ui.bulk_scan import BulkScanDialog
@@ -466,6 +466,15 @@ class MainWindow(QMainWindow):
         if not self._active_profile:
             QMessageBox.warning(self, "Žiadny profil", "Najprv vyberte profil.")
             return
+        if not validate_qr(qr_raw):
+            self.last_receipt_label.setText("")
+            QMessageBox.warning(
+                self, "Neplatný QR kód",
+                "Načítaný kód nie je platný eKasa QR kód a nebol odoslaný.\n\n"
+                "Naskenujte QR kód priamo z eKasa bločku "
+                "(online alebo offline formát).",
+            )
+            return
         if self._db.receipt_exists(self._active_profile.id, qr_raw):
             reply = QMessageBox.question(
                 self, "Duplicitný bloček",
@@ -593,6 +602,10 @@ class MainWindow(QMainWindow):
 
     def _enqueue_bulk_scan(self, qr_raw: str) -> None:
         """Queue a scanned QR for sequential background processing."""
+        if not validate_qr(qr_raw):
+            if self._bulk_dialog is not None:
+                self._bulk_dialog.add_error("Neplatný QR kód – preskočené")
+            return
         self._bulk_queue.append(qr_raw)
         self._process_bulk_queue()
 

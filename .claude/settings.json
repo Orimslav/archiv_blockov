@@ -49,7 +49,14 @@
       "Bash(git commit -m ' *)",
       "Bash(venv/Scripts/python.exe -m compileall -q core/excel_export.py core/pdf_export.py core/database.py ui/main_window.py)",
       "Bash(git checkout *)",
-      "Bash(git branch *)"
+      "Bash(git branch *)",
+      "Bash(git config *)",
+      "Bash(git remote *)",
+      "Bash(git push *)",
+      "WebFetch(domain:github.com)",
+      "Bash(venv/Scripts/python.exe -c \"import yaml; yaml.safe_load\\(open\\('.github/workflows/build-release.yml',encoding='utf-8'\\)\\); print\\('YAML OK'\\)\")",
+      "Bash(git ls-remote *)",
+      "Bash(git tag *)"
     ],
     "additionalDirectories": [
       "c:\\Users\\hrbkam\\.claude\\projects\\c--Webapp-Archiv-blockov\\memory"
