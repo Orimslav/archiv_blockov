@@ -307,20 +307,43 @@ class Database:
             return [self._row_to_vendor(r) for r in cur.fetchall()]
 
     def get_or_create_vendor(self, profile_id: int, parsed: ParsedReceipt) -> Vendor:
-        """Resolve a vendor by IČO under the profile, creating it if unknown."""
+        """Resolve a vendor by IČO under the profile, creating it if unknown.
+
+        Some e-kasa receipts carry no IČO (the API returns ``ico=null``) — only
+        a DIČ. Vendors are unique on ``(profile_id, ico)``, so storing an empty
+        string would make every IČO-less vendor collide. For those, match on DIČ
+        then name, and store ``NULL`` (SQLite treats NULLs as distinct, so any
+        number of IČO-less vendors can coexist).
+        """
         with self._cursor() as cur:
+            row = None
             if parsed.ico:
                 cur.execute(
                     "SELECT * FROM vendors WHERE profile_id = ? AND ico = ?",
                     (profile_id, parsed.ico),
                 )
                 row = cur.fetchone()
-                if row:
-                    return self._row_to_vendor(row)
+            else:
+                if parsed.dic:
+                    cur.execute(
+                        "SELECT * FROM vendors WHERE profile_id = ? "
+                        "AND COALESCE(ico, '') = '' AND dic = ?",
+                        (profile_id, parsed.dic),
+                    )
+                    row = cur.fetchone()
+                if row is None and parsed.nazov:
+                    cur.execute(
+                        "SELECT * FROM vendors WHERE profile_id = ? "
+                        "AND COALESCE(ico, '') = '' AND name = ?",
+                        (profile_id, parsed.nazov),
+                    )
+                    row = cur.fetchone()
+            if row:
+                return self._row_to_vendor(row)
             cur.execute(
                 "INSERT INTO vendors (profile_id, ico, dic, name, address) "
                 "VALUES (?, ?, ?, ?, ?)",
-                (profile_id, parsed.ico, parsed.dic, parsed.nazov, parsed.adresa),
+                (profile_id, parsed.ico or None, parsed.dic, parsed.nazov, parsed.adresa),
             )
             vendor_id = int(cur.lastrowid)
         return Vendor(
@@ -344,7 +367,7 @@ class Database:
                 return self._row_to_vendor(row)
             cur.execute(
                 "INSERT INTO vendors (profile_id, ico, dic, name, address) "
-                "VALUES (?, '', '', ?, '')",
+                "VALUES (?, NULL, '', ?, '')",
                 (profile_id, name),
             )
             vendor_id = int(cur.lastrowid)

@@ -508,7 +508,12 @@ class MainWindow(QMainWindow):
                 parsed.nazov = info.name
                 parsed.adresa = info.full_address()
                 parsed.dic = parsed.dic or info.dic
-        self._save_parsed_receipt(parsed)
+        try:
+            self._save_parsed_receipt(parsed)
+        except Exception as exc:  # noqa: BLE001 — never leave the UI hanging
+            logger.exception("Uloženie naskenovaného bločku zlyhalo")
+            self.last_receipt_label.setText("")
+            QMessageBox.critical(self, "Chyba pri ukladaní", str(exc))
 
     def _save_parsed_receipt(self, parsed: ParsedReceipt) -> None:
         pid = self._active_profile.id
@@ -639,6 +644,17 @@ class MainWindow(QMainWindow):
 
     def _on_bulk_scan_finished(self, parsed: ParsedReceipt) -> None:
         """Save a scanned receipt silently using the vendor's default category."""
+        try:
+            self._save_bulk_receipt(parsed)
+        except Exception as exc:  # noqa: BLE001 — record and keep the queue moving
+            logger.exception("Uloženie bločku pri hromadnom skenovaní zlyhalo")
+            if self._bulk_dialog is not None:
+                self._bulk_dialog.add_error(str(exc))
+        self._bulk_busy = False
+        self._process_bulk_queue()
+
+    def _save_bulk_receipt(self, parsed: ParsedReceipt) -> None:
+        """Persist one bulk-scanned receipt with the vendor's learned category."""
         if parsed.ico and not parsed.nazov:
             info = company_lookup.lookup_by_ico(parsed.ico)
             if info:
@@ -662,9 +678,6 @@ class MainWindow(QMainWindow):
         if self._bulk_dialog is not None:
             self._bulk_dialog.add_success(label)
         self.last_receipt_label.setText(f"Posledný bloček: {label}")
-
-        self._bulk_busy = False
-        self._process_bulk_queue()
 
     def _on_bulk_scan_failed(self, message: str) -> None:
         """Record a failed scan in the bulk window and continue the queue."""
