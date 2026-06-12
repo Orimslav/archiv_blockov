@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 )
 
 from core.database import Database
+from ui import constants as c
 
 
 class CategoryManagerDialog(QDialog):
@@ -57,12 +58,25 @@ class CategoryManagerDialog(QDialog):
 
     def _reload(self) -> None:
         self.list.clear()
+        # Built-in "Nezaradené" fallback (category_id IS NULL) — always shown,
+        # neutral grey, not editable/deletable.
+        builtin = QListWidgetItem("Nezaradené")
+        builtin.setData(0x0100, None)               # Qt.UserRole — no real id
+        builtin.setData(0x0101, c.CLR_UNCATEGORIZED)  # Qt.UserRole+1
+        builtin.setForeground(QColor(c.CLR_UNCATEGORIZED))
+        builtin.setToolTip("Vstavaná kategória – nedá sa upraviť ani vymazať.")
+        self.list.addItem(builtin)
         for cat in self._db.get_categories(self._profile_id):
             item = QListWidgetItem(cat.name)
             item.setData(0x0100, cat.id)        # Qt.UserRole
             item.setData(0x0101, cat.color)     # Qt.UserRole+1
             item.setForeground(QColor(cat.color))
             self.list.addItem(item)
+
+    @staticmethod
+    def _is_builtin(item: Optional[QListWidgetItem]) -> bool:
+        """True for the virtual 'Nezaradené' fallback row (no real category id)."""
+        return item is not None and item.data(0x0100) is None
 
     def _add(self) -> None:
         name, ok = QInputDialog.getText(self, "Nová kategória", "Názov:")
@@ -76,6 +90,12 @@ class CategoryManagerDialog(QDialog):
     def _rename(self, item: Optional[QListWidgetItem]) -> None:
         if not item:
             return
+        if self._is_builtin(item):
+            QMessageBox.information(
+                self, "Nezaradené",
+                "Vstavaná kategória „Nezaradené“ sa nedá upraviť.",
+            )
+            return
         name, ok = QInputDialog.getText(
             self, "Premenovať", "Názov:", text=item.text()
         )
@@ -87,6 +107,12 @@ class CategoryManagerDialog(QDialog):
         item = self.list.currentItem()
         if not item:
             return
+        if self._is_builtin(item):
+            QMessageBox.information(
+                self, "Nezaradené",
+                "Vstavaná kategória „Nezaradené“ sa nedá upraviť.",
+            )
+            return
         color = QColorDialog.getColor(QColor(item.data(0x0101)), self, "Vyberte farbu")
         if color.isValid():
             self._db.update_category(item.data(0x0100), item.text(), color.name())
@@ -95,6 +121,12 @@ class CategoryManagerDialog(QDialog):
     def _delete(self) -> None:
         item = self.list.currentItem()
         if not item:
+            return
+        if self._is_builtin(item):
+            QMessageBox.information(
+                self, "Nezaradené",
+                "Vstavaná kategória „Nezaradené“ sa nedá vymazať.",
+            )
             return
         reply = QMessageBox.question(
             self, "Vymazať kategóriu",

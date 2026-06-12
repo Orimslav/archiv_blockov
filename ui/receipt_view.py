@@ -104,6 +104,14 @@ class ReceiptTableModel(QAbstractTableModel):
             return self._columns[column][0]
         return ""
 
+    def vat_columns(self) -> List[tuple]:
+        """Return visible VAT-breakdown columns as (key, header) pairs.
+
+        Firm-only columns (``col[2]``) are exactly the VAT breakdown set
+        (base/tax per rate + rounding); empty in household mode.
+        """
+        return [(col[0], col[1]) for col in self._columns if col[2]]
+
     # -- Qt model interface ------------------------------------------------
 
     def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:
@@ -238,6 +246,7 @@ class ReceiptView(QWidget):
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self._popis_history: List[str] = []
+        self._vat_enabled = False
         self.model = ReceiptTableModel()
         self.proxy = QSortFilterProxyModel()
         self.proxy.setSourceModel(self.model)
@@ -277,6 +286,7 @@ class ReceiptView(QWidget):
 
     def set_data(self, receipts: List[Receipt], vat_enabled: bool) -> None:
         """Populate the table and refresh the summary bar."""
+        self._vat_enabled = vat_enabled
         self.model.set_data(receipts, vat_enabled)
         self._resize_columns()
         self._assign_platba_delegate()
@@ -329,10 +339,11 @@ class ReceiptView(QWidget):
         header.setStretchLastSection(True)
 
     def _update_summary(self, receipts: List[Receipt]) -> None:
+        receipts = [r for r in receipts if r]
         total = round(sum(r.celkom or 0 for r in receipts), 2)
         cash = round(sum(r.celkom or 0 for r in receipts if r.platba != "karta"), 2)
         card = round(sum(r.celkom or 0 for r in receipts if r.platba == "karta"), 2)
-        self.summary.setText(
+        text = (
             f"<b>SPOLU:</b> <span style='color:{c.CLR_ACCENT}'>{total:.2f} €</span>"
             f" &nbsp;|&nbsp; <b>Hotovosť:</b> "
             f"<span style='color:{c.CLR_CASH}'>{cash:.2f} €</span>"
@@ -340,6 +351,19 @@ class ReceiptView(QWidget):
             f"<span style='color:{c.CLR_CARD}'>{card:.2f} €</span>"
             f" &nbsp;|&nbsp; Počet: {len(receipts)}"
         )
+        # Firm mode: add a per-column DPH breakdown sum line (base/tax per rate
+        # + rounding), matching the visible VAT columns of the table.
+        if self._vat_enabled:
+            parts = []
+            for key, header in self.model.vat_columns():
+                s = round(sum(getattr(r, key, 0) or 0 for r in receipts), 2)
+                parts.append(f"{header}: {s:.2f} €")
+            if parts:
+                text += (
+                    f"<br><b>DPH rozklad:</b> "
+                    + " &nbsp;|&nbsp; ".join(parts)
+                )
+        self.summary.setText(text)
 
     def selected_receipt_id(self) -> Optional[int]:
         """Return the id of the currently selected receipt."""

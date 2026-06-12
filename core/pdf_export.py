@@ -186,7 +186,7 @@ def export_receipt_detail_pdf(
     else:
         story.extend(vendor_flow)
     story.append(Spacer(1, 6))
-    story.append(HRFlowable(width="100%", color=colors.grey))
+    story.append(HRFlowable(width="100%", color=colors.black))
     story.append(Spacer(1, 6))
 
     # Receipt meta
@@ -216,7 +216,7 @@ def export_receipt_detail_pdf(
 
     story.append(Paragraph(f"<b>SPOLU: {_money(receipt.celkom)} €</b>", styles["total"]))
     story.append(Spacer(1, 10))
-    story.append(HRFlowable(width="100%", color=colors.grey))
+    story.append(HRFlowable(width="100%", color=colors.black))
     story.append(Spacer(1, 6))
 
     # Identifiers
@@ -445,103 +445,98 @@ def _period_table(receipts: Sequence[Receipt], vat: bool, styles: Dict) -> Table
     def any_nonzero(getter) -> bool:
         return any(round(getter(r) or 0, 2) for r in receipts)
 
-    cols: List[Tuple[str, object, str]] = [
-        ("Dátum", lambda r: r.datum_display(), "left"),
-        ("Predajca", lambda r: r.vendor_name or "—", "left"),
-        ("Kategória", lambda r: r.category_name or "Nezaradené", "left"),
+    # Column spec: (label, getter, align, sum_field). sum_field names the
+    # Receipt attribute summed into the SPOLU row (None = not summed).
+    cols: List[Tuple[str, object, str, Optional[str]]] = [
+        ("Dátum", lambda r: r.datum_display(), "left", None),
+        ("Predajca", lambda r: r.vendor_name or "—", "left", None),
+        ("Kategória", lambda r: r.category_name or "Nezaradené", "left", None),
     ]
     if vat:
-        cols.append(("0% Z", lambda r: _money(r.base_0), "right"))
+        cols.append(("0% Z", lambda r: _money(r.base_0), "right", "base_0"))
         if any_nonzero(lambda r: r.base_5) or any_nonzero(lambda r: r.tax_5):
-            cols.append(("5% Z", lambda r: _money(r.base_5), "right"))
-            cols.append(("5% D", lambda r: _money(r.tax_5), "right"))
+            cols.append(("5% Z", lambda r: _money(r.base_5), "right", "base_5"))
+            cols.append(("5% D", lambda r: _money(r.tax_5), "right", "tax_5"))
         if any_nonzero(lambda r: r.base_19) or any_nonzero(lambda r: r.tax_19):
-            cols.append(("19% Z", lambda r: _money(r.base_19), "right"))
-            cols.append(("19% D", lambda r: _money(r.tax_19), "right"))
+            cols.append(("19% Z", lambda r: _money(r.base_19), "right", "base_19"))
+            cols.append(("19% D", lambda r: _money(r.tax_19), "right", "tax_19"))
         if any_nonzero(lambda r: r.base_23) or any_nonzero(lambda r: r.tax_23):
-            cols.append(("23% Z", lambda r: _money(r.base_23), "right"))
-            cols.append(("23% D", lambda r: _money(r.tax_23), "right"))
+            cols.append(("23% Z", lambda r: _money(r.base_23), "right", "base_23"))
+            cols.append(("23% D", lambda r: _money(r.tax_23), "right", "tax_23"))
         if any_nonzero(lambda r: r.zaokruhlenie):
-            cols.append(("Zaokr.", lambda r: _money(r.zaokruhlenie), "right"))
-    cols.append(("Celkom", lambda r: _money(r.celkom), "right"))
-    cols.append(("Platba", lambda r: "Karta" if r.platba == "karta" else "Hotovosť", "left"))
-    cols.append(("Popis", lambda r: r.popis or "", "left"))
+            cols.append(("Zaokr.", lambda r: _money(r.zaokruhlenie), "right", "zaokruhlenie"))
+    cols.append(("Celkom", lambda r: _money(r.celkom), "right", "celkom"))
+    cols.append(("Platba", lambda r: "Karta" if r.platba == "karta" else "Hotovosť", "left", None))
+    cols.append(("Popis", lambda r: r.popis or "", "left", None))
 
-    header = [Paragraph(_esc(label), styles["cellb"]) for label, _, _ in cols]
+    header = [Paragraph(_esc(label), styles["cellb"]) for label, _, _, _ in cols]
     data = [header]
     for r in receipts:
         data.append([
-            Paragraph(_esc(str(getter(r))), styles["cell"]) for _, getter, _ in cols
+            Paragraph(_esc(str(getter(r))), styles["cell"]) for _, getter, _, _ in cols
         ])
 
-    # Totals: SPOLU / Hotovosť / Karta. Sums sit under the 'Celkom' column.
-    celkom_idx = next(i for i, (lbl, _, _) in enumerate(cols) if lbl == "Celkom")
-    total_all = round(sum(r.celkom or 0 for r in receipts), 2)
+    # SPOLU: sum every numeric column (VAT breakdown + Celkom).
+    spolu_row = [Paragraph("", styles["cell"]) for _ in cols]
+    spolu_row[0] = Paragraph("SPOLU", styles["cellb"])
+    for i, (_, _, _, field) in enumerate(cols):
+        if field:
+            s = round(sum(getattr(r, field, 0) or 0 for r in receipts), 2)
+            spolu_row[i] = Paragraph(_money(s), styles["cellb"])
+    data.append(spolu_row)
+
+    # Hotovosť / Karta: the Celkom total split by payment method.
+    celkom_idx = next(i for i, col in enumerate(cols) if col[0] == "Celkom")
     total_cash = round(sum(r.celkom or 0 for r in receipts if r.platba != "karta"), 2)
     total_card = round(sum(r.celkom or 0 for r in receipts if r.platba == "karta"), 2)
-    for label, value in (("SPOLU", total_all), ("Hotovosť", total_cash), ("Karta", total_card)):
+    for label, value in (("Hotovosť", total_cash), ("Karta", total_card)):
         row = [Paragraph("", styles["cell"]) for _ in cols]
         row[0] = Paragraph(_esc(label), styles["cellb"])
         row[celkom_idx] = Paragraph(_money(value), styles["cellb"])
         data.append(row)
 
     table = Table(data, repeatRows=1)
+    # Pure black-and-white: no background fills, black grid, header and totals
+    # set off by bold lines instead of colour.
     style = [
         ("FONTNAME", (0, 0), (-1, -1), _FONT_NAME),
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0f3460")),
-        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-        ("GRID", (0, 0), (-1, -1), 0.4, colors.grey),
+        ("GRID", (0, 0), (-1, -1), 0.4, colors.black),
+        ("LINEBELOW", (0, 0), (-1, 0), 1.0, colors.black),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("TOPPADDING", (0, 0), (-1, -1), 3),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f2f4f8")]),
-        ("BACKGROUND", (0, len(receipts) + 1), (-1, -1), colors.HexColor("#e8edf5")),
+        ("LINEABOVE", (0, len(receipts) + 1), (-1, len(receipts) + 1), 1.0, colors.black),
     ]
-    for i, (_, _, align) in enumerate(cols):
+    for i, (_, _, align, _) in enumerate(cols):
         style.append(("ALIGN", (i, 0), (i, -1), "RIGHT" if align == "right" else "LEFT"))
     table.setStyle(TableStyle(style))
     return table
 
 
 def _grid_style(total_row: bool = False) -> TableStyle:
-    """Standard grid style for summary tables (dark header, zebra body)."""
+    """Black-and-white grid style for summary tables (no fills, bold lines)."""
     style = [
         ("FONTNAME", (0, 0), (-1, -1), _FONT_NAME),
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0f3460")),
-        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
         ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
         ("ALIGN", (0, 0), (0, -1), "LEFT"),
-        ("GRID", (0, 0), (-1, -1), 0.4, colors.grey),
+        ("GRID", (0, 0), (-1, -1), 0.4, colors.black),
+        ("LINEBELOW", (0, 0), (-1, 0), 1.0, colors.black),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f2f4f8")]),
         ("TOPPADDING", (0, 0), (-1, -1), 4),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
     ]
     if total_row:
-        style.append(("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#e8edf5")))
-        style.append(("LINEABOVE", (0, -1), (-1, -1), 0.8, colors.HexColor("#0f3460")))
+        style.append(("LINEABOVE", (0, -1), (-1, -1), 0.8, colors.black))
     return TableStyle(style)
 
 
-def _chip_cell(name: str, color: str, styles: Dict) -> Table:
-    """Render a small coloured square + category name as an inline cell."""
-    swatch = Table([[""]], colWidths=[4 * mm], rowHeights=[4 * mm])
-    try:
-        fill = colors.HexColor(color or "#888888")
-    except (ValueError, AttributeError):
-        fill = colors.HexColor("#888888")
-    swatch.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), fill),
-        ("BOX", (0, 0), (-1, -1), 0.4, colors.grey),
-    ]))
-    cell = Table([[swatch, Paragraph(_esc(name), styles["cell"])]],
-                 colWidths=[6 * mm, None])
-    cell.setStyle(TableStyle([
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 0),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-    ]))
-    return cell
+def _chip_cell(name: str, color: str, styles: Dict) -> Paragraph:
+    """Render the category name as a plain cell (black-and-white, no swatch).
+
+    The ``color`` argument is kept for call-site compatibility but ignored so
+    the report stays purely black-and-white for printing.
+    """
+    return Paragraph(_esc(name), styles["cell"])
 
 
 def _styles() -> Dict[str, ParagraphStyle]:
@@ -626,13 +621,11 @@ def _items_table(items: List[ReceiptItem], styles: Dict) -> Table:
     table = Table(data, colWidths=[None, 18 * mm, 24 * mm, 24 * mm, 16 * mm])
     table.setStyle(TableStyle([
         ("FONTNAME", (0, 0), (-1, -1), _FONT_NAME),
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0f3460")),
-        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
         ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
         ("ALIGN", (0, 0), (0, -1), "LEFT"),
-        ("GRID", (0, 0), (-1, -1), 0.4, colors.grey),
+        ("GRID", (0, 0), (-1, -1), 0.4, colors.black),
+        ("LINEBELOW", (0, 0), (-1, 0), 1.0, colors.black),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f2f4f8")]),
         ("TOPPADDING", (0, 0), (-1, -1), 4),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
     ]))

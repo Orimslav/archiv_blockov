@@ -52,23 +52,30 @@ def _sk_decimal(value: float) -> str:
     return f"{value:.2f}".replace(".", ",")
 
 
+def _column_sums(rows: List[list], numeric: frozenset) -> dict:
+    """Sum each numeric column across all data rows (rounded to 2 decimals)."""
+    return {i: round(sum(row[i] for row in rows), 2) for i in numeric}
+
+
 def export_period_csv(path: Path, receipts: List[Receipt], profile: Profile) -> Path:
     """Write receipts to a UTF-8-BOM, ';'-separated CSV (Slovak locale)."""
     headers = _HEADERS_VAT if profile.vat_enabled else _HEADERS_SIMPLE
     numeric = _numeric_cols(profile.vat_enabled)
+    rows = [_row_values(r, profile.vat_enabled) for r in receipts]
+    sums = _column_sums(rows, numeric)
     with open(path, "w", newline="", encoding="utf-8-sig") as fh:
         writer = csv.writer(fh, delimiter=";")
         writer.writerow(headers)
-        for r in receipts:
-            row = _row_values(r, profile.vat_enabled)
+        for row in rows:
             writer.writerow([
                 _sk_decimal(v) if i in numeric else v for i, v in enumerate(row)
             ])
-        total = round(sum(x.celkom or 0 for x in receipts), 2)
+        # SPOLU row sums every numeric column (full VAT breakdown + Celkom).
         writer.writerow([])
         total_row = [""] * len(headers)
         total_row[0] = "SPOLU"
-        total_row[headers.index("Celkom")] = _sk_decimal(total)
+        for i, value in sums.items():
+            total_row[i] = _sk_decimal(value)
         writer.writerow(total_row)
     return path
 
@@ -84,31 +91,34 @@ def export_period_xlsx(path: Path, receipts: List[Receipt], profile: Profile) ->
 
     headers = _HEADERS_VAT if profile.vat_enabled else _HEADERS_SIMPLE
     numeric = _numeric_cols(profile.vat_enabled)
+    rows = [_row_values(r, profile.vat_enabled) for r in receipts]
     wb = Workbook()
     ws = wb.active
     ws.title = "Bločky"
     ws.append(headers)
     for cell in ws[1]:
         cell.font = Font(bold=True)
-    for r in receipts:
-        ws.append(_row_values(r, profile.vat_enabled))
+    for row in rows:
+        ws.append(row)
     # Apply the Slovak number format to the monetary columns of the data rows.
-    for row_cells in ws.iter_rows(min_row=2, max_row=1 + len(receipts)):
+    for row_cells in ws.iter_rows(min_row=2, max_row=1 + len(rows)):
         for idx in numeric:
             row_cells[idx].number_format = _NUM_FMT
 
-    total = round(sum(x.celkom or 0 for x in receipts), 2)
-    celkom_idx = headers.index("Celkom")  # 0-based
+    # SPOLU row sums every numeric column (full VAT breakdown + Celkom).
+    sums = _column_sums(rows, numeric)
     ws.append([])
     total_row = [""] * len(headers)
     total_row[0] = "SPOLU"
-    total_row[celkom_idx] = total
+    for i, value in sums.items():
+        total_row[i] = value
     ws.append(total_row)
     last = ws.max_row
     ws.cell(row=last, column=1).font = Font(bold=True)
-    total_cell = ws.cell(row=last, column=celkom_idx + 1)
-    total_cell.font = Font(bold=True)
-    total_cell.number_format = _NUM_FMT
+    for idx in numeric:
+        cell = ws.cell(row=last, column=idx + 1)
+        cell.font = Font(bold=True)
+        cell.number_format = _NUM_FMT
     wb.save(path)
     return path
 

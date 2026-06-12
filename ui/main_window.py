@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
 )
 
 from core import company_lookup
-from core.database import Database
+from core.database import Database, UNCATEGORIZED_FILTER
 from core import excel_export
 from core import pdf_export
 from core.ekasa_parser import parse_qr, validate_qr
@@ -197,6 +197,7 @@ class MainWindow(QMainWindow):
         self.profile_panel.add_requested.connect(self._add_profile)
         self.profile_panel.edit_requested.connect(self._edit_profile)
         self.profile_panel.delete_requested.connect(self._delete_profile)
+        self.profile_panel.uncategorized_clicked.connect(self._filter_uncategorized)
         body.addWidget(self.profile_panel)
         body.addWidget(self._build_tabs(), 1)
         root.addLayout(body, 1)
@@ -405,6 +406,7 @@ class MainWindow(QMainWindow):
         self.vendor_filter.blockSignals(True)
         self.category_filter.clear()
         self.category_filter.addItem("Všetky kategórie", None)
+        self.category_filter.addItem("Nezaradené", UNCATEGORIZED_FILTER)
         for cat in self._db.get_categories(pid):
             self.category_filter.addItem(cat.name, cat.id)
         self.vendor_filter.clear()
@@ -434,6 +436,16 @@ class MainWindow(QMainWindow):
         if self._active_profile:
             count = self._db.count_uncategorized(self._active_profile.id)
             self.profile_panel.set_uncategorized_count(count)
+
+    def _filter_uncategorized(self) -> None:
+        """Apply the 'Nezaradené' category filter (clears period filters so all
+        uncategorized receipts across the profile are shown)."""
+        self.year_combo.setCurrentIndex(0)
+        self.month_combo.setCurrentIndex(0)
+        idx = self.category_filter.findData(UNCATEGORIZED_FILTER)
+        if idx >= 0:
+            self.category_filter.setCurrentIndex(idx)
+        self.tabs.setCurrentIndex(0)
 
     def _on_tab_changed(self, index: int) -> None:
         if self.tabs.tabText(index) == "Dashboard":

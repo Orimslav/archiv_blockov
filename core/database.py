@@ -29,6 +29,10 @@ logger = logging.getLogger(__name__)
 
 SCHEMA_VERSION = 1
 
+# Sentinel for the category filter: match receipts with at least one
+# uncategorized item (receipt_items.category_id IS NULL).
+UNCATEGORIZED_FILTER = "__uncategorized__"
+
 # Tables that a valid Archiv_blockov database must contain (restore guard).
 _REQUIRED_TABLES = {
     "profiles", "categories", "vendors", "receipts", "receipt_items", "settings",
@@ -578,7 +582,12 @@ class Database:
         if vendor_id:
             sql.append("AND r.vendor_id = ?")
             params.append(vendor_id)
-        if category_id:
+        if category_id == UNCATEGORIZED_FILTER:
+            sql.append(
+                "AND EXISTS (SELECT 1 FROM receipt_items ri "
+                "WHERE ri.receipt_id = r.id AND ri.category_id IS NULL)"
+            )
+        elif category_id:
             sql.append(
                 "AND EXISTS (SELECT 1 FROM receipt_items ri "
                 "WHERE ri.receipt_id = r.id AND ri.category_id = ?)"

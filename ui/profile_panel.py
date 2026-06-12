@@ -25,6 +25,7 @@ class ProfilePanel(QWidget):
     add_requested = Signal()
     edit_requested = Signal(int)
     delete_requested = Signal(int)
+    uncategorized_clicked = Signal()
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -48,8 +49,17 @@ class ProfilePanel(QWidget):
         self.list.customContextMenuRequested.connect(self._show_menu)
         self.list.itemDoubleClicked.connect(self._on_double_click)
 
-        self.badge = QLabel("")
-        self.badge.setStyleSheet(f"color:{c.CLR_WARNING}; padding:4px;")
+        # Clickable badge — applies the "Nezaradené" filter to the receipt list.
+        self.badge = QPushButton("")
+        self.badge.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.badge.setToolTip("Zobraziť bločky s nezaradenými položkami")
+        self.badge.setFlat(True)
+        self.badge.setStyleSheet(
+            f"QPushButton {{ color:{c.CLR_WARNING}; padding:4px; border:none; "
+            "text-align:left; }"
+        )
+        self.badge.setVisible(False)
+        self.badge.clicked.connect(self.uncategorized_clicked.emit)
 
         btn_add = QPushButton("+ Profil")
         btn_add.clicked.connect(self.add_requested.emit)
@@ -81,7 +91,8 @@ class ProfilePanel(QWidget):
 
     def set_uncategorized_count(self, count: int) -> None:
         """Update the uncategorized review badge."""
-        self.badge.setText(f"Nezaradené položky: {count}" if count else "")
+        self.badge.setText(f"⚠ Nezaradené položky: {count}" if count else "")
+        self.badge.setVisible(count > 0)
 
     def current_profile_id(self) -> Optional[int]:
         """Return the currently selected profile id."""
