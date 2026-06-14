@@ -27,6 +27,17 @@ from PySide6.QtWidgets import (
 from models.models import Receipt
 from ui import constants as c
 
+# Dedicated role used by the proxy for sorting, so columns sort by their
+# underlying value (date object / float) rather than the formatted display
+# string (which would sort "DD.MM.YYYY" and "12.50 €" lexically).
+SORT_ROLE = Qt.ItemDataRole.UserRole + 1
+
+# Numeric column keys (right-aligned, sorted as floats).
+_NUMERIC_KEYS = {
+    "base_0", "base_5", "tax_5", "base_19", "tax_19",
+    "base_23", "tax_23", "zaokruhlenie", "celkom",
+}
+
 # Column spec: (key, header, firm_only, vat_group)
 # vat_group gates visibility: shown only if any receipt has non-zero value
 # (0% base is always shown in firm mode).
@@ -134,6 +145,8 @@ class ReceiptTableModel(QAbstractTableModel):
 
         if role == Qt.ItemDataRole.DisplayRole:
             return self._display_value(receipt, key)
+        if role == SORT_ROLE:
+            return self._sort_value(receipt, key)
         if role == Qt.ItemDataRole.ForegroundRole and key == "category":
             if receipt.category_color:
                 return QColor(receipt.category_color)
@@ -181,6 +194,18 @@ class ReceiptTableModel(QAbstractTableModel):
             self.popis_changed.emit(receipt.id, text)
             return True
         return False
+
+    def _sort_value(self, r: Receipt, key: str):
+        """Return a comparable value for sorting (not the formatted string)."""
+        if key == "datum":
+            # Return an int ordinal: Qt's proxy sorts ints natively and fast.
+            # (Returning a Python date object isn't comparable by the default
+            # lessThan, which makes the sort indicator appear stuck.) None
+            # sorts first (0) so NULL dates stay together at one end.
+            return r.datum.toordinal() if r.datum is not None else 0
+        if key in _NUMERIC_KEYS:
+            return getattr(r, key, 0.0) or 0.0
+        return self._display_value(r, key)
 
     def _display_value(self, r: Receipt, key: str) -> str:
         if key == "datum":
@@ -250,7 +275,7 @@ class ReceiptView(QWidget):
         self.model = ReceiptTableModel()
         self.proxy = QSortFilterProxyModel()
         self.proxy.setSourceModel(self.model)
-        self.proxy.setSortRole(Qt.ItemDataRole.DisplayRole)
+        self.proxy.setSortRole(SORT_ROLE)
 
         self.table = QTableView()
         self.table.setModel(self.proxy)

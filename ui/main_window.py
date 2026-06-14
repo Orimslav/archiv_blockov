@@ -266,9 +266,7 @@ class MainWindow(QMainWindow):
         # Filter toolbar
         filters = QHBoxLayout()
         self.year_combo = QComboBox()
-        self.year_combo.addItem("Všetky roky", None)
-        for y in _YEARS:
-            self.year_combo.addItem(str(y), y)
+        self._populate_year_combo()
         self.month_combo = QComboBox()
         self.month_combo.addItem("Všetky mesiace", None)
         for i, m in enumerate(c.MONTHS_SK, start=1):
@@ -398,10 +396,29 @@ class MainWindow(QMainWindow):
 
     # ------------------------------------------------------------ filters
 
+    def _populate_year_combo(self) -> None:
+        """Fill the year filter: the fixed range plus any years actually in the
+        data (e.g. receipts from 2024 or earlier, filed by their QR date).
+
+        Preserves the current selection across rebuilds."""
+        previous = self.year_combo.currentData()
+        years = set(_YEARS)
+        if self._active_profile:
+            years.update(self._db.get_receipt_years(self._active_profile.id))
+        self.year_combo.blockSignals(True)
+        self.year_combo.clear()
+        self.year_combo.addItem("Všetky roky", None)
+        for y in sorted(years):
+            self.year_combo.addItem(str(y), y)
+        pos = self.year_combo.findData(previous)
+        self.year_combo.setCurrentIndex(pos if pos >= 0 else 0)
+        self.year_combo.blockSignals(False)
+
     def _refresh_filter_combos(self) -> None:
         if not self._active_profile:
             return
         pid = self._active_profile.id
+        self._populate_year_combo()
         self.category_filter.blockSignals(True)
         self.vendor_filter.blockSignals(True)
         self.category_filter.clear()

@@ -807,6 +807,21 @@ class Database:
             )
             return [(r["m"] or 0, r["total"] or 0.0) for r in cur.fetchall()]
 
+    def get_receipt_years(self, profile_id: int) -> List[int]:
+        """Return distinct accounting years present in the profile, ascending.
+
+        Lets the UI offer years outside the default range (e.g. receipts
+        scanned from 2024 or earlier, filed by their QR date)."""
+        with self._cursor() as cur:
+            cur.execute(
+                """SELECT DISTINCT account_year AS y FROM receipts
+                    WHERE profile_id = ? AND account_year IS NOT NULL
+                      AND account_year > 0
+                    ORDER BY account_year""",
+                (profile_id,),
+            )
+            return [int(r["y"]) for r in cur.fetchall()]
+
     def count_uncategorized(self, profile_id: int) -> int:
         """Count items still without a category in the profile."""
         with self._cursor() as cur:

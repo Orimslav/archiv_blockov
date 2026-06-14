@@ -15,6 +15,7 @@ from PySide6.QtCharts import (
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import (
+    QComboBox,
     QGridLayout,
     QHBoxLayout,
     QLabel,
@@ -33,6 +34,13 @@ class DashboardWidget(QWidget):
         super().__init__(parent)
         self._db = db
         self._profile_id: Optional[int] = None
+
+        self.year_combo = QComboBox()
+        self.year_combo.currentIndexChanged.connect(self.refresh)
+        year_row = QHBoxLayout()
+        year_row.addWidget(QLabel("Rok:"))
+        year_row.addWidget(self.year_combo)
+        year_row.addStretch(1)
 
         self.kpi_total = self._kpi_label()
         self.kpi_count = self._kpi_label()
@@ -53,6 +61,7 @@ class DashboardWidget(QWidget):
         charts.addWidget(self.pie_view, 1)
 
         layout = QVBoxLayout(self)
+        layout.addLayout(year_row)
         layout.addLayout(kpi_row)
         layout.addLayout(charts, 1)
 
@@ -82,11 +91,29 @@ class DashboardWidget(QWidget):
         self._profile_id = profile_id
         self.refresh()
 
+    def _populate_years(self) -> None:
+        """Fill the year selector with the current year plus any years present
+        in the profile's data (e.g. receipts from 2024 or earlier).
+
+        Preserves the current selection; defaults to the latest year."""
+        previous = self.year_combo.currentData()
+        years = {date.today().year}
+        if self._profile_id:
+            years.update(self._db.get_receipt_years(self._profile_id))
+        self.year_combo.blockSignals(True)
+        self.year_combo.clear()
+        for y in sorted(years, reverse=True):
+            self.year_combo.addItem(str(y), y)
+        pos = self.year_combo.findData(previous)
+        self.year_combo.setCurrentIndex(pos if pos >= 0 else 0)
+        self.year_combo.blockSignals(False)
+
     def refresh(self) -> None:
-        """Recompute KPIs and rebuild both charts."""
+        """Recompute KPIs and rebuild both charts for the selected year."""
         if not self._profile_id:
             return
-        year = date.today().year
+        self._populate_years()
+        year = self.year_combo.currentData() or date.today().year
         monthly = self._db.get_monthly_totals(self._profile_id, year)
         cat_totals = self._db.get_category_totals(self._profile_id, year)
 
